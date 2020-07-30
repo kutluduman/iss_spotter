@@ -32,10 +32,35 @@ const fetchMyIP = (callback) => {
     console.log('Response: ', response && response.statusCode);
     console.log('Body: ', body);
     const ipText = JSON.parse(body); // in order to treat like object to receive values, first I have to parse it
-    console.log('IP: ', ipText.ip); // then I can reach the value with the key
+    const ipAddress = ipText.ip;
+    console.log('IP: ', ipAddress); // then I can reach the value with the key
 
   });
-
 };
 
-module.exports = { fetchMyIP };
+const fetchGeoCords = (ip,callback) => {
+
+  request(`https://ipvigilante.com/${ip}`, (error,response,body) => {
+    if (error) {
+      callback(error, null);
+      return;
+    }
+      
+    if (response.statusCode !== 200) {
+      const msg = `Status Code ${response.statusCode} when fetching IP. Response: ${body}`;
+      callback(Error(msg), null);
+      return;
+    }
+
+    const data = JSON.parse(body);
+
+    const geoData = {
+      lat: data.data.latitude,
+      long: data.data.longitude,
+    };
+    callback(null, geoData);
+  });
+};
+
+
+module.exports = { fetchMyIP, fetchGeoCords };
