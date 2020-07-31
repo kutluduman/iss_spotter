@@ -31,12 +31,22 @@ const fetchMyIP = (callback) => {
     console.log('Error: ', error);
     console.log('Response: ', response && response.statusCode);
     console.log('Body: ', body);
-    const ipText = JSON.parse(body); // in order to treat like object to receive values, first I have to parse it
-    const ipAddress = ipText.ip;
-    console.log('IP: ', ipAddress); // then I can reach the value with the key
+    const ip = JSON.parse(body).ip;
+    callback(null, ip);
 
   });
 };
+
+/**
+ * Makes a single API request to retrieve the lat/lng for a given IPv4 address.
+ * Input:
+ *   - The ip (ipv4) address (string)
+ *   - A callback (to pass back an error or the lat/lng object)
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The lat and lng as an object (null if error). Example:
+ *     { latitude: '49.27670', longitude: '-123.13000' }
+ */
 
 const fetchGeoCords = (ip,callback) => {
 
@@ -52,13 +62,8 @@ const fetchGeoCords = (ip,callback) => {
       return;
     }
 
-    const data = JSON.parse(body);
-
-    const geoData = {
-      lat: data.data.latitude,
-      long: data.data.longitude,
-    };
-    callback(null, geoData);
+    const { latitude, longitude } = JSON.parse(body).data;
+    callback(null, { latitude, longitude });
   });
 };
 
@@ -76,23 +81,56 @@ const fetchISSFlyOverTimes = function(coords, callback) {
   const urlNotify = `http://api.open-notify.org/iss-pass.json?lat=${coords.latitude}&lon=${coords.longitude}`;
   
   request(urlNotify, (error,response,body) => {
- // error can be set if invalid domain, user is offline, etc.
- if (error) {
-  callback(error, null);
-  return;
-}
+    // error can be set if invalid domain, user is offline, etc.
+    if (error) {
+      callback(error, null);
+      return;
+    }
 
-// if non-200 status, assume server error
-if (response.statusCode !== 200) {
-  const msg = `Status Code ${response.statusCode} when fetching IP. Response: ${body}`;
-  callback(Error(msg), null);
-  return;
-  } 
+    // if non-200 status, assume server error
+    if (response.statusCode !== 200) {
+      const msg = `Status Code ${response.statusCode} when fetching IP. Response: ${body}`;
+      callback(Error(msg), null);
+      return;
+    }
      
-    const data = JSON.parse(body);
-      return callback(null, data);
+    const passes = JSON.parse(body).response;
+    callback(null, passes);
+  });
+};
+
+// iss.js
+
+/**
+ * Orchestrates multiple API requests in order to determine the next 5 upcoming ISS fly overs for the user's current location.
+ * Input:
+ *   - A callback with an error or results.
+ * Returns (via Callback):
+ *   - An error, if any (nullable)
+ *   - The fly-over times as an array (null if error):
+ *     [ { risetime: <number>, duration: <number> }, ... ]
+ */
+const nextISSTimesForMyLocation = function(callback) {
+  fetchMyIP((error, ip) => {
+    if (error) {
+      return callback(error, null);
+    }
+
+    fetchGeoCords(ip, (error, loc) => {
+      if (error) {
+        return callback(error, null);
+      }
+
+      fetchISSFlyOverTimes(loc, (error, nextPasses) => {
+        if (error) {
+          return callback(error, null);
+        }
+
+        callback(null, nextPasses);
+      });
+    });
   });
 };
 
 
-module.exports = { fetchMyIP, fetchGeoCords, fetchISSFlyOverTimes };
+module.exports = { fetchMyIP, fetchGeoCords, fetchISSFlyOverTimes, nextISSTimesForMyLocation };
